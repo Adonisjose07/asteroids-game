@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:80"
+    expose:
+      - "8080"
     restart: unless-stopped
     container_name: asteroids-game
