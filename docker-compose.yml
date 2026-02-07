@@ -7,7 +7,7 @@ services:
       - "80"
     restart: unless-stopped
     container_name: asteroids-game
-    network:
+    networks:
       - dokploy-network
 
 networks:
