@@ -1,4 +1,5 @@
 import { setKeyState } from '../core/Input.js';
+import { logicalWidth, logicalHeight } from '../core/GameState.js';
 
 export class MobileControls {
     constructor(canvas, ship, weaponTypes, getUnlockedWeapons, resetGame, gameState) {
@@ -24,8 +25,10 @@ export class MobileControls {
 
         // Action Buttons
         this.buttons = {
-            fire: { x: 0, y: 0, radius: 45, pressed: false, label: 'FIRE' },
-            switch: { x: 0, y: 0, radius: 35, pressed: false, label: 'WPN' }
+            fire: { x: 0, y: 0, radius: 45, pressed: false, label: 'FIRE', key: 'Space' },
+            thrust: { x: 0, y: 0, radius: 40, pressed: false, label: 'THRUST', key: 'ArrowUp' },
+            brake: { x: 0, y: 0, radius: 32, pressed: false, label: 'BRAKE', key: 'ArrowDown' },
+            switch: { x: 0, y: 0, radius: 32, pressed: false, label: 'WPN' }
         };
 
         if (this.enabled) {
@@ -68,7 +71,7 @@ export class MobileControls {
     }
 
     processTouch(id, x, y, type) {
-        const halfWidth = this.canvas.width / (window.devicePixelRatio || 1) / 2;
+        const halfWidth = logicalWidth / 2;
 
         if (x < halfWidth) {
             // LEFT SIDE: Joystick
@@ -94,22 +97,12 @@ export class MobileControls {
                     this.joystick.knobY = y;
                 }
 
-                // Map to keys
+                // Map to Absolute Direction
                 const angle = Math.atan2(this.joystick.knobY - this.joystick.baseY, this.joystick.knobX - this.joystick.baseX);
                 const distPercent = Math.min(dist / maxDist, 1);
 
-                // Reset keys first
-                setKeyState('ArrowUp', distPercent > 0.3);
-                setKeyState('ArrowLeft', false);
-                setKeyState('ArrowRight', false);
-
-                if (distPercent > 0.3) {
-                    const deg = (angle * 180) / Math.PI;
-                    // Rotation mapping (very simplified)
-                    if (deg < -45 && deg > -135) { /* Forward only */ }
-                    else if (deg >= -45 && deg <= 45) setKeyState('ArrowRight', true);
-                    else if (deg > 45 && deg < 135) { /* Backwards? maybe not needed */ }
-                    else setKeyState('ArrowLeft', true);
+                if (distPercent > 0.15) {
+                    this.ship.angle = angle;
                 }
             }
         } else {
@@ -119,24 +112,31 @@ export class MobileControls {
     }
 
     updateButtons(x, y, type, id) {
-        const w = this.canvas.width / (window.devicePixelRatio || 1);
-        const h = this.canvas.height / (window.devicePixelRatio || 1);
+        // Positions are handled in draw() for consistency, but we need them here for hit detection
+        const w = logicalWidth;
+        const h = logicalHeight;
 
-        this.buttons.fire.x = w - 80;
-        this.buttons.fire.y = h - 80;
-        this.buttons.switch.x = w - 180;
-        this.buttons.switch.y = h - 60;
+        this.buttons.fire.x = w - 70;
+        this.buttons.fire.y = h - 70;
+        this.buttons.thrust.x = w - 160;
+        this.buttons.thrust.y = h - 100;
+        this.buttons.brake.x = w - 230;
+        this.buttons.brake.y = h - 60;
+        this.buttons.switch.x = w - 60;
+        this.buttons.switch.y = h - 160;
 
         for (const key in this.buttons) {
             const btn = this.buttons[key];
             const dist = Math.hypot(x - btn.x, y - btn.y);
 
             if (dist < btn.radius) {
-                if (type === 'touchstart') {
-                    btn.pressed = true;
-                    btn.touchId = id;
-                    if (key === 'fire') setKeyState('Space', true);
-                    if (key === 'switch') this.triggerWeaponSwitch();
+                if (type === 'touchstart' || type === 'touchmove') {
+                    if (!btn.pressed) {
+                        btn.pressed = true;
+                        btn.touchId = id;
+                        if (btn.key) setKeyState(btn.key, true);
+                        if (key === 'switch') this.triggerWeaponSwitch();
+                    }
                 }
             }
         }
@@ -155,7 +155,6 @@ export class MobileControls {
         if (this.joystick.touchId === id) {
             this.joystick.active = false;
             this.joystick.touchId = null;
-            setKeyState('ArrowUp', false);
             setKeyState('ArrowLeft', false);
             setKeyState('ArrowRight', false);
         }
@@ -164,7 +163,7 @@ export class MobileControls {
             if (btn.touchId === id) {
                 btn.pressed = false;
                 btn.touchId = null;
-                if (key === 'fire') setKeyState('Space', false);
+                if (btn.key) setKeyState(btn.key, false);
             }
         }
     }
@@ -185,29 +184,34 @@ export class MobileControls {
 
             ctx.beginPath();
             ctx.arc(this.joystick.knobX, this.joystick.knobY, 30, 0, Math.PI * 2);
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.fill();
         }
 
-        // Draw Buttons
-        const w = this.canvas.width / (window.devicePixelRatio || 1);
-        const h = this.canvas.height / (window.devicePixelRatio || 1);
-        this.buttons.fire.x = w - 80;
-        this.buttons.fire.y = h - 80;
-        this.buttons.switch.x = w - 180;
-        this.buttons.switch.y = h - 60;
+        // Positions for drawing buttons (must match updateButtons for visual consistency)
+        const w = logicalWidth;
+        const h = logicalHeight;
+        this.buttons.fire.x = w - 70;
+        this.buttons.fire.y = h - 70;
+        this.buttons.thrust.x = w - 160;
+        this.buttons.thrust.y = h - 100;
+        this.buttons.brake.x = w - 230;
+        this.buttons.brake.y = h - 60;
+        this.buttons.switch.x = w - 60;
+        this.buttons.switch.y = h - 160;
 
         for (const key in this.buttons) {
             const btn = this.buttons[key];
             ctx.beginPath();
             ctx.arc(btn.x, btn.y, btn.radius, 0, Math.PI * 2);
-            ctx.fillStyle = btn.pressed ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.3)';
+            ctx.fillStyle = btn.pressed ? 'rgba(0, 255, 200, 0.6)' : 'rgba(255, 255, 255, 0.2)';
             ctx.fill();
             ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
             ctx.stroke();
 
             ctx.fillStyle = 'white';
-            ctx.font = 'bold 12px Arial';
+            ctx.font = `bold ${btn.radius * 0.4}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(btn.label, btn.x, btn.y);

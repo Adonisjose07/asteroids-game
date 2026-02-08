@@ -1,5 +1,5 @@
 import './style.css';
-import { gameState, resetGameState, canvas, ctx, resizeCanvas } from './core/GameState.js';
+import { gameState, resetGameState, canvas, ctx, resizeCanvas, logicalWidth, logicalHeight } from './core/GameState.js';
 import { keys } from './core/Input.js';
 import { initStars, updateStars, drawStars } from './vfx/Starfield.js';
 import { drawNebula } from './vfx/Nebula.js';
@@ -22,21 +22,19 @@ const dustParticles = [];
 // Initial resize
 resizeCanvas();
 
-const ship = new Ship(canvas.width, canvas.height);
+const ship = new Ship(logicalWidth, logicalHeight);
 const mobileControls = new MobileControls(canvas, ship, WEAPON_TYPES, getUnlockedWeapons, resetGame, gameState);
 
 window.addEventListener('resize', () => {
   resizeCanvas();
-  // Optionally reset ship position or notify modules of change
-  // ship.x = canvas.width / 2;
-  // ship.y = canvas.height / 2;
+  // Update mobile controls canvas reference if needed, though they use a reference already
 });
 
 function spawnInitialAsteroids() {
   asteroids.length = 0;
   const count = 3 + gameState.level * 2;
   for (let i = 0; i < count; i++) {
-    asteroids.push(createAsteroid(null, null, 40 + Math.random() * 20, 3, canvas.width, canvas.height, ASTEROID_SPEED, gameState.level));
+    asteroids.push(createAsteroid(null, null, 40 + Math.random() * 20, 3, logicalWidth, logicalHeight, ASTEROID_SPEED, gameState.level));
   }
 }
 
@@ -62,10 +60,10 @@ function updateStarDust() {
     d.y += d.vy;
     d.life--;
 
-    if (d.x < 0) d.x = canvas.width;
-    if (d.x > canvas.width) d.x = 0;
-    if (d.y < 0) d.y = canvas.height;
-    if (d.y > canvas.height) d.y = 0;
+    if (d.x < 0) d.x = logicalWidth;
+    if (d.x > logicalWidth) d.x = 0;
+    if (d.y < 0) d.y = logicalHeight;
+    if (d.y > logicalHeight) d.y = 0;
 
     if (d.life <= 0) dustParticles.splice(i, 1);
   }
@@ -105,7 +103,7 @@ window.addEventListener('keydown', (e) => {
 
 function resetGame() {
   resetGameState();
-  ship.reset(canvas.width, canvas.height);
+  ship.reset(logicalWidth, logicalHeight);
   clearBullets();
   clearParticles();
   clearScorePopups();
@@ -129,7 +127,7 @@ function shipHit(damage = 34) {
       gameState.gameOver = true;
       createExplosion(ship.x, ship.y, 50, 'yellow', 5, 60);
     } else {
-      ship.reset(canvas.width, canvas.height);
+      ship.reset(logicalWidth, logicalHeight);
     }
   } else {
     ship.blinkTime = 60;
@@ -141,8 +139,8 @@ function splitAsteroid(index) {
   if (a.level > 1) {
     const newRadius = a.radius / 2;
     const newLevel = a.level - 1;
-    asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel, canvas.width, canvas.height, ASTEROID_SPEED, gameState.level));
-    asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel, canvas.width, canvas.height, ASTEROID_SPEED, gameState.level));
+    asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel, logicalWidth, logicalHeight, ASTEROID_SPEED, gameState.level));
+    asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel, logicalWidth, logicalHeight, ASTEROID_SPEED, gameState.level));
 
     // Level 2+ Hazard: Large asteroids release star dust
     if (a.level === 3 && gameState.level >= 2) {
@@ -224,7 +222,7 @@ function checkCollisions() {
 }
 
 function update() {
-  updateStars(canvas.width, canvas.height);
+  updateStars(logicalWidth, logicalHeight);
   updateParticles();
   updateScorePopups();
   updateShake();
@@ -241,14 +239,14 @@ function update() {
   }
   if (ship.shootTimer > 0) ship.shootTimer--;
 
-  ship.update(keys, canvas.width, canvas.height, gameState.gameOver);
-  updateBullets(canvas.width, canvas.height);
-  updateAsteroids(asteroids, canvas.width, canvas.height);
+  ship.update(keys, logicalWidth, logicalHeight, gameState.gameOver);
+  updateBullets(logicalWidth, logicalHeight);
+  updateAsteroids(asteroids, logicalWidth, logicalHeight);
   if (planet) updatePlanet(planet);
   checkCollisions();
 
   if (asteroids.length === 0 && !gameState.gameOver) {
-    if (!planet) planet = createPlanet(canvas.width, canvas.height, gameState.level);
+    if (!planet) planet = createPlanet(logicalWidth, logicalHeight, gameState.level);
     else if (planet.destroyed) {
       planet = null;
       gameState.level++;
@@ -261,10 +259,10 @@ function draw() {
   ctx.save();
   ctx.translate(screenShake.offsetX, screenShake.offsetY);
   ctx.fillStyle = 'black';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
   drawStars(ctx);
-  drawNebula(ctx, canvas.width, canvas.height);
+  drawNebula(ctx, logicalWidth, logicalHeight);
   drawStarDust(ctx);
   if (planet) drawPlanet(ctx, planet);
   ship.draw(ctx);
@@ -272,9 +270,9 @@ function draw() {
   drawAsteroids(ctx, asteroids);
   drawParticles(ctx);
   drawScorePopups(ctx);
-  drawFlash(ctx, canvas.width, canvas.height);
+  drawFlash(ctx, logicalWidth, logicalHeight);
   mobileControls.draw(ctx);
-  drawHUD(ctx, gameState, ship, ship.currentWeapon, WEAPON_TYPES, getUnlockedWeapons(), canvas.width, canvas.height);
+  drawHUD(ctx, gameState, ship, ship.currentWeapon, WEAPON_TYPES, getUnlockedWeapons(), logicalWidth, logicalHeight);
   ctx.restore();
 }
 
@@ -284,6 +282,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-initStars(canvas.width, canvas.height);
+initStars(logicalWidth, logicalHeight);
 spawnInitialAsteroids();
 loop();

@@ -8,26 +8,30 @@ export const gameState = {
 export const canvas = document.querySelector('#game');
 export const ctx = canvas ? canvas.getContext('2d') : null;
 
+// Logical dimensions (for physics/logic)
+export let logicalWidth = window.innerWidth;
+export let logicalHeight = window.innerHeight;
+
 if (!canvas) {
     console.error('Canvas element #game not found!');
 } else {
-    // Initial size with high-DPI support
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
-    if (ctx) ctx.scale(dpr, dpr);
+    resizeCanvas();
 }
 
 export function resizeCanvas() {
     if (canvas) {
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = window.innerWidth * dpr;
-        canvas.height = window.innerHeight * dpr;
-        canvas.style.width = `${window.innerWidth}px`;
-        canvas.style.height = `${window.innerHeight}px`;
-        if (ctx) ctx.scale(dpr, dpr);
+        logicalWidth = window.innerWidth;
+        logicalHeight = window.innerHeight;
+
+        canvas.width = logicalWidth * dpr;
+        canvas.height = logicalHeight * dpr;
+        canvas.style.width = `${logicalWidth}px`;
+        canvas.style.height = `${logicalHeight}px`;
+
+        if (ctx) {
+            ctx.scale(dpr, dpr);
+        }
     }
 }
 
