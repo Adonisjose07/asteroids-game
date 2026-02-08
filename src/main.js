@@ -41,6 +41,54 @@ const gameState = {
 // --- Particle System ---
 const particles = [];
 
+// --- Star Dust System (Dangerous Level 2+) ---
+const dustParticles = [];
+
+function createStarDust(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 1.5 + 0.5;
+    dustParticles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: Math.random() * 2 + 2,
+      life: 300 + Math.random() * 200, // 5-8 seconds
+      color: `hsla(${240 + Math.random() * 60}, 100%, 75%, 0.8)` // Glowing blue/purple
+    });
+  }
+}
+
+function updateStarDust() {
+  for (let i = dustParticles.length - 1; i >= 0; i--) {
+    const d = dustParticles[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    d.life--;
+
+    // Slight wrap-around for dust or just let it die
+    if (d.x < 0) d.x = canvas.width;
+    if (d.x > canvas.width) d.x = 0;
+    if (d.y < 0) d.y = canvas.height;
+    if (d.y > canvas.height) d.y = 0;
+
+    if (d.life <= 0) dustParticles.splice(i, 1);
+  }
+}
+
+function drawStarDust() {
+  dustParticles.forEach(d => {
+    ctx.save();
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = d.color;
+    ctx.fillStyle = d.color;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
 function createExplosion(x, y, count, color = 'white', speed = 3, life = 40) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -350,6 +398,8 @@ const ship = {
   braking: false,
   visible: true,
   blinkTime: 0,
+  hp: 100,
+  maxHp: 100,
 
   update() {
     if (gameState.gameOver || !this.visible) return;
@@ -789,8 +839,9 @@ function createAsteroid(x, y, radius, level) {
   return {
     x: x ?? Math.random() * canvas.width,
     y: y ?? Math.random() * canvas.height,
-    vx: (Math.random() * 2 - 1) * ASTEROID_SPEED * (4 - level) * 0.5,
-    vy: (Math.random() * 2 - 1) * ASTEROID_SPEED * (4 - level) * 0.5,
+    // Speed scales with game level (10% faster per level)
+    vx: (Math.random() * 2 - 1) * ASTEROID_SPEED * (4 - level) * 0.5 * (1 + gameState.level * 0.1),
+    vy: (Math.random() * 2 - 1) * ASTEROID_SPEED * (4 - level) * 0.5 * (1 + gameState.level * 0.1),
     radius: radius,
     level: level, // 3: Large, 2: Medium, 1: Small
     health: health,
@@ -1250,7 +1301,7 @@ function checkCollisions() {
       const a = asteroids[i];
       const dist = Math.hypot(ship.x - a.x, ship.y - a.y);
       if (dist < a.radius + ship.radius) {
-        shipHit();
+        shipHit(34); // ~3 hits per life
         break;
       }
     }
@@ -1259,7 +1310,18 @@ function checkCollisions() {
     if (planet && !planet.destroyed) {
       const dist = Math.hypot(ship.x - planet.x, ship.y - planet.y);
       if (dist < planet.radius + ship.radius) {
-        shipHit();
+        shipHit(50); // 2 hits per life
+      }
+    }
+
+    // Ship-Star Dust collision
+    for (let i = dustParticles.length - 1; i >= 0; i--) {
+      const d = dustParticles[i];
+      const dist = Math.hypot(ship.x - d.x, ship.y - d.y);
+      if (dist < d.radius + ship.radius) {
+        shipHit(10); // Small damage
+        dustParticles.splice(i, 1);
+        break;
       }
     }
   }
@@ -1272,27 +1334,43 @@ function splitAsteroid(index) {
     const newLevel = a.level - 1;
     asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel));
     asteroids.push(createAsteroid(a.x, a.y, newRadius, newLevel));
+
+    // Level 2+ Hazard: Large asteroids release star dust
+    if (a.level === 3 && gameState.level >= 2) {
+      createStarDust(a.x, a.y, 8 + Math.floor(Math.random() * 5));
+    }
   }
   asteroids.splice(index, 1);
 }
 
-function shipHit() {
+function shipHit(damage = 34) {
+  if (ship.blinkTime > 0 || !ship.visible) return;
+
   // Visual effects
   createExplosion(ship.x, ship.y, 30, 'orange', 4, 50);
   triggerShake(10, 20);
   triggerFlash('red');
 
-  gameState.lives--;
-  if (gameState.lives <= 0) {
-    gameState.gameOver = true;
-    createExplosion(ship.x, ship.y, 50, 'yellow', 5, 60);
+  ship.hp -= damage;
+
+  if (ship.hp <= 0) {
+    gameState.lives--;
+    ship.hp = ship.maxHp;
+
+    if (gameState.lives <= 0) {
+      gameState.gameOver = true;
+      createExplosion(ship.x, ship.y, 50, 'yellow', 5, 60);
+    } else {
+      // Respawn at center with invulnerability
+      ship.x = canvas.width / 2;
+      ship.y = canvas.height / 2;
+      ship.velocity = { x: 0, y: 0 };
+      ship.angle = -Math.PI / 2;
+      ship.blinkTime = 120; // 2 seconds
+    }
   } else {
-    // Respawn at center with invulnerability
-    ship.x = canvas.width / 2;
-    ship.y = canvas.height / 2;
-    ship.velocity = { x: 0, y: 0 };
-    ship.angle = -Math.PI / 2;
-    ship.blinkTime = 120; // 2 seconds at 60fps
+    // Just a hit, temporary flicker/invulnerability
+    ship.blinkTime = 60; // 1 second
   }
 }
 
@@ -1301,6 +1379,7 @@ function resetGame() {
   gameState.lives = 3;
   gameState.gameOver = false;
   gameState.level = 1;
+  ship.hp = ship.maxHp;
   ship.x = canvas.width / 2;
   ship.y = canvas.height / 2;
   ship.velocity = { x: 0, y: 0 };
@@ -1317,10 +1396,34 @@ function drawUI() {
   ctx.fillStyle = 'white';
   ctx.font = '20px "Courier New"';
   ctx.textAlign = 'left';
-  ctx.fillText(`SCORE: ${gameState.score}`, 20, 40);
-  ctx.fillText(`LIVES: ${gameState.lives}`, 20, 70);
+  ctx.fillText(`SCORE: ${gameState.score}`, 20, 30);
+  ctx.fillText(`LIVES: ${gameState.lives}`, 20, 55);
+  ctx.fillStyle = '#ffcc00';
+  ctx.fillText(`LEVEL: ${gameState.level}`, 20, 80);
 
-  // Weapon indicator - top left below lives
+  // Ship HP Bar
+  const hpWidth = 100;
+  const hpHeight = 10;
+  const hpX = 20;
+  const hpY = 95;
+  const hpPercent = ship.hp / ship.maxHp;
+
+  // HP Bar background
+  ctx.fillStyle = 'rgba(100, 0, 0, 0.5)';
+  ctx.fillRect(hpX, hpY, hpWidth, hpHeight);
+
+  // HP Bar fill (color-coded)
+  const r = hpPercent < 0.5 ? 255 : Math.floor(255 - (hpPercent - 0.5) * 2 * 255);
+  const g = hpPercent > 0.5 ? 255 : Math.floor(hpPercent * 2 * 255);
+  ctx.fillStyle = `rgb(${r}, ${g}, 0)`;
+  ctx.fillRect(hpX, hpY, hpWidth * hpPercent, hpHeight);
+
+  // HP Bar border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(hpX, hpY, hpWidth, hpHeight);
+
+  // Weapon indicator - below HP bar
   const weapon = WEAPON_TYPES[currentWeapon];
 
   // Background box
@@ -1328,18 +1431,18 @@ function drawUI() {
   ctx.strokeStyle = weapon.color;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(15, 85, 140, 50, 8);
+  ctx.roundRect(15, 115, 140, 50, 8);
   ctx.fill();
   ctx.stroke();
 
   // Weapon name
   ctx.fillStyle = weapon.color;
   ctx.font = 'bold 14px "Courier New"';
-  ctx.fillText(weapon.name, 50, 105);
+  ctx.fillText(weapon.name, 50, 132);
 
   // Weapon icon preview
   ctx.save();
-  ctx.translate(32, 118);
+  ctx.translate(32, 145);
 
   if (currentWeapon === 0) {
     // Plasma icon
@@ -1386,14 +1489,14 @@ function drawUI() {
   const unlocked = getUnlockedWeapons();
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
   ctx.font = '10px "Courier New"';
-  ctx.fillText(`[Q] ${unlocked.length}/${WEAPON_TYPES.length}`, 70, 128);
+  ctx.fillText(`[Q] ${unlocked.length}/${WEAPON_TYPES.length}`, 70, 158);
 
   // Next unlock hint
   const nextLocked = WEAPON_TYPES.find(w => gameState.score < w.unlockScore);
   if (nextLocked) {
     ctx.fillStyle = 'rgba(255, 200, 0, 0.7)';
     ctx.font = '9px "Courier New"';
-    ctx.fillText(`NEXT: ${nextLocked.unlockScore} pts`, 20, 148);
+    ctx.fillText(`NEXT UNLOCK: ${nextLocked.unlockScore} pts`, 20, 180);
   }
 
   if (gameState.gameOver) {
@@ -1409,6 +1512,7 @@ function drawUI() {
 function update() {
   updateStars();
   updateParticles();
+  updateStarDust();
   updateScorePopups();
   updateShake();
   updateFlash();
@@ -1429,6 +1533,7 @@ function draw() {
 
   drawStars();
   drawNebula();
+  drawStarDust();
   drawPlanet();
   ship.draw();
   drawBullets();
