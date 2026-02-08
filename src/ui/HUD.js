@@ -1,4 +1,8 @@
 export function drawHUD(ctx, gameState, ship, currentWeapon, weaponTypes, unlockedWeapons, canvasWidth, canvasHeight) {
+    const scale = canvasWidth < 600 ? 0.8 : 1.0;
+    ctx.save();
+    ctx.scale(scale, scale);
+
     ctx.fillStyle = 'white';
     ctx.font = '20px "Courier New"';
     ctx.textAlign = 'left';
@@ -36,9 +40,11 @@ export function drawHUD(ctx, gameState, ship, currentWeapon, weaponTypes, unlock
     ctx.font = '10px "Courier New"';
     ctx.fillText(`[Q] ${unlockedWeapons.length}/${weaponTypes.length}`, 70, 158);
 
+    ctx.restore();
+
     if (gameState.gameOver) {
         ctx.textAlign = 'center';
-        ctx.font = '60px "Courier New"';
+        ctx.font = `${Math.min(60, canvasWidth / 10)}px "Courier New"`;
         ctx.fillStyle = 'white';
         ctx.fillText('GAME OVER', canvasWidth / 2, canvasHeight / 2);
         ctx.font = '20px "Courier New"';

@@ -11,3 +11,7 @@ window.addEventListener('keyup', (e) => {
 export function isKeyDown(code) {
     return !!keys[code];
 }
+
+export function setKeyState(code, isPressed) {
+    keys[code] = isPressed;
+}
